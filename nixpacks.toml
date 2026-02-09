@@ -1,0 +1,21 @@
+provider "nixpacks" {
+  version = "1"
+}
+
+phases {
+  setup = {
+    nixPkgs = ["nodejs-18_x", "npm-9_x"]
+  }
+
+  install = {
+    cmds = ["npm ci --legacy-peer-deps"]
+  }
+
+  build = {
+    cmds = []
+  }
+
+  start = {
+    cmd = "node server.js"
+  }
+}
