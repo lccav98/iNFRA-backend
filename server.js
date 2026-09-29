@@ -6,7 +6,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { ServiceSchema, validateImageFile, sanitizeInput, rateLimiter } from './utils/security.js';
+import { ServiceSchema, validateImageFile, sanitizeInput, rateLimiter, securityHeadersMiddleware, apiAuthMiddleware } from './utils/security.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,6 +16,9 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 const { Pool } = pg;
 const app = express();
 const PORT = process.env.PORT || 5001;
+
+// Configuração segura para operar atrás de proxies reversos (Nginx / Cloudflare / Railway)
+app.set('trust proxy', 1);
 
 const pool = new Pool({
     user: process.env.DB_USER || 'postgres',
@@ -32,10 +35,12 @@ const corsOptions = {
     optionsSuccessStatus: 200
 };
 
+app.use(securityHeadersMiddleware());
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(rateLimiter());
+app.use(apiAuthMiddleware());
 
 // Configuração do Multer com validação de segurança
 const storage = multer.diskStorage({
@@ -204,7 +209,7 @@ app.get('/api/servicos', async (req, res) => {
         res.json(result.rows);
     } catch (error) {
         console.error('Erro ao buscar serviços:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Erro interno ao processar a solicitação.' });
     }
 });
 
@@ -218,7 +223,7 @@ app.get('/api/servicos/:id', async (req, res) => {
         res.json(result.rows[0]);
     } catch (error) {
         console.error('Erro ao buscar serviço:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Erro interno ao processar a solicitação.' });
     }
 });
 
@@ -246,7 +251,7 @@ app.post('/api/servicos', upload.single('foto'), async (req, res) => {
             fs.unlinkSync(req.file.path);
         }
 
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Erro interno ao processar a solicitação.' });
     }
 });
 
@@ -272,7 +277,7 @@ app.put('/api/servicos/:id', async (req, res) => {
         res.json(result.rows[0]);
     } catch (error) {
         console.error('Erro ao atualizar serviço:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Erro interno ao processar a solicitação.' });
     }
 });
 
@@ -283,7 +288,7 @@ app.delete('/api/servicos/:id', async (req, res) => {
         res.status(204).send();
     } catch (error) {
         console.error('Erro ao deletar serviço:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Erro interno ao processar a solicitação.' });
     }
 });
 
@@ -295,7 +300,7 @@ app.get('/api/materiais', async (req, res) => {
         res.json(result.rows);
     } catch (error) {
         console.error('Erro ao buscar materiais:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Erro interno ao processar a solicitação.' });
     }
 });
 
@@ -310,7 +315,7 @@ app.post('/api/materiais', async (req, res) => {
         res.status(201).json(result.rows[0]);
     } catch (error) {
         console.error('Erro ao criar material:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Erro interno ao processar a solicitação.' });
     }
 });
 
@@ -329,7 +334,7 @@ app.put('/api/materiais/:id', async (req, res) => {
         res.json(result.rows[0]);
     } catch (error) {
         console.error('Erro ao atualizar material:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Erro interno ao processar a solicitação.' });
     }
 });
 
@@ -340,7 +345,7 @@ app.delete('/api/materiais/:id', async (req, res) => {
         res.status(204).send();
     } catch (error) {
         console.error('Erro ao deletar material:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Erro interno ao processar a solicitação.' });
     }
 });
 
@@ -352,7 +357,7 @@ app.get('/api/equipamentos', async (req, res) => {
         res.json(result.rows);
     } catch (error) {
         console.error('Erro ao buscar equipamentos:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Erro interno ao processar a solicitação.' });
     }
 });
 
@@ -367,7 +372,7 @@ app.post('/api/equipamentos', async (req, res) => {
         res.status(201).json(result.rows[0]);
     } catch (error) {
         console.error('Erro ao criar equipamento:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Erro interno ao processar a solicitação.' });
     }
 });
 
@@ -386,7 +391,7 @@ app.put('/api/equipamentos/:id', async (req, res) => {
         res.json(result.rows[0]);
     } catch (error) {
         console.error('Erro ao atualizar equipamento:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Erro interno ao processar a solicitação.' });
     }
 });
 
@@ -397,7 +402,7 @@ app.delete('/api/equipamentos/:id', async (req, res) => {
         res.status(204).send();
     } catch (error) {
         console.error('Erro ao deletar equipamento:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Erro interno ao processar a solicitação.' });
     }
 });
 
@@ -428,7 +433,7 @@ app.post('/api/whatsapp/photos', upload.array('photos', 10), async (req, res) =>
         });
     } catch (error) {
         console.error('Erro ao processar fotos do WhatsApp:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Erro interno ao processar a solicitação.' });
     }
 });
 
@@ -442,7 +447,7 @@ app.post('/api/whatsapp/webhook', async (req, res) => {
         res.status(200).json({ success: true });
     } catch (error) {
         console.error('Erro no webhook do WhatsApp:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Erro interno ao processar a solicitação.' });
     }
 });
 
@@ -454,7 +459,7 @@ app.get('/api/alocacoes', async (req, res) => {
         res.json(result.rows);
     } catch (error) {
         console.error('Erro ao buscar alocações:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Erro interno ao processar a solicitação.' });
     }
 });
 
@@ -469,7 +474,7 @@ app.post('/api/alocacoes', async (req, res) => {
         res.status(201).json(result.rows[0]);
     } catch (error) {
         console.error('Erro ao criar alocação:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Erro interno ao processar a solicitação.' });
     }
 });
 
@@ -488,7 +493,7 @@ app.put('/api/alocacoes/:id', async (req, res) => {
         res.json(result.rows[0]);
     } catch (error) {
         console.error('Erro ao atualizar alocação:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Erro interno ao processar a solicitação.' });
     }
 });
 
@@ -499,7 +504,7 @@ app.delete('/api/alocacoes/:id', async (req, res) => {
         res.status(204).send();
     } catch (error) {
         console.error('Erro ao deletar alocação:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Erro interno ao processar a solicitação.' });
     }
 });
 

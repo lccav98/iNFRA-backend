@@ -85,12 +85,25 @@ export function validateImageFile(file) {
 
 export function rateLimiter() {
   const requests = new Map();
+  const windowMs = 60 * 1000; // 1 minuto
+  const maxRequests = 100;
+
+  // Limpeza periódica para evitar vazamento de memória (Memory Leak)
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, timestamps] of requests.entries()) {
+      const active = timestamps.filter(t => now - t < windowMs);
+      if (active.length === 0) {
+        requests.delete(ip);
+      } else {
+        requests.set(ip, active);
+      }
+    }
+  }, 60 * 1000).unref();
   
   return (req, res, next) => {
-    const ip = req.ip || req.connection.remoteAddress;
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
     const now = Date.now();
-    const windowMs = 60 * 1000; // 1 minuto
-    const maxRequests = 100;
     
     if (!requests.has(ip)) {
       requests.set(ip, []);
@@ -106,6 +119,41 @@ export function rateLimiter() {
     recentRequests.push(now);
     requests.set(ip, recentRequests);
     
+    next();
+  };
+}
+
+export function securityHeadersMiddleware() {
+  return (req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+  };
+}
+
+export function apiAuthMiddleware() {
+  return (req, res, next) => {
+    // Permitir preflight CORS, health check e leitura pública
+    if (req.method === 'OPTIONS' || req.path === '/health' || req.method === 'GET') {
+      return next();
+    }
+    
+    const configuredKey = process.env.API_KEY || process.env.AUTH_SECRET;
+    
+    // Em modo produção, exige autenticação para mutações (POST, PUT, DELETE)
+    if (configuredKey) {
+      const authHeader = req.headers['authorization'] || req.headers['x-api-key'];
+      const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+
+      if (token === configuredKey) {
+        return next();
+      }
+
+      return res.status(401).json({ error: 'Acesso não autorizado. Chave de API inválida ou ausente.' });
+    }
+
     next();
   };
 }
